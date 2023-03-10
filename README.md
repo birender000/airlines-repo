@@ -36,5 +36,6 @@ Learnings
 6. Data cleaning
 7. Data transformation and analysis
 8. Integration with azure SQL database using jdbc
+9. integration with github and azure devops.
 
 
