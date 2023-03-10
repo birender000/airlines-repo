@@ -1,0 +1,9 @@
+{
+	"name": "airlines-adfactory",
+	"location": "southeastasia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "2aa83389-0091-4565-a917-22af0a2069d2",
+		"tenantId": "6fa122e5-8cca-437a-8316-f581aa8a85b7"
+	}
+}
