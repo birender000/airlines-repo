@@ -1,0 +1,1003 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "airlines-adfactory"
+		},
+		"landingzone_ls_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'landingzone_ls'"
+		},
+		"airlinesTrigger_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/9a1be070-51c7-4856-9b97-326a714b21a9/resourceGroups/airlines-rg/providers/Microsoft.Storage/storageAccounts/airlinesstorageaccount"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/master-pipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "main pipeline.",
+				"activities": [
+					{
+						"name": "rawdata",
+						"description": "It will provide the metadata such as files name from rawdata folder.",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "rawdataset",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					},
+					{
+						"name": "ForEachFile",
+						"description": "iterate each filename. \n",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "rawdata",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('rawdata').output.childItems",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "checkfilename",
+									"description": "Check the filename  = required file name.",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "filename",
+											"dependencyConditions": [
+												"Completed"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@or(\n    or(\n        equals(variables('filename'),'airports.csv')\n        ,equals(variables('filename'),'airlines.csv')\n    )\n    ,equals(variables('filename'),'flights.zip')\n)",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "invalid",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": true,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false,
+													"translator": {
+														"type": "TabularTranslator",
+														"typeConversion": true,
+														"typeConversionSettings": {
+															"allowDataTruncation": true,
+															"treatBooleanAsNumber": false
+														}
+													}
+												},
+												"inputs": [
+													{
+														"referenceName": "dynamicdataset",
+														"type": "DatasetReference",
+														"parameters": {
+															"fileName": {
+																"value": "@variables('filename')",
+																"type": "Expression"
+															},
+															"folderName": "rawdata",
+															"containerName": "landing-zone"
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "dynamicdataset",
+														"type": "DatasetReference",
+														"parameters": {
+															"fileName": {
+																"value": "@variables('filename')",
+																"type": "Expression"
+															},
+															"folderName": "invalid",
+															"containerName": "rejected"
+														}
+													}
+												]
+											}
+										],
+										"ifTrueActivities": [
+											{
+												"name": "validation pipeline",
+												"description": "to validate the schema.",
+												"type": "ExecutePipeline",
+												"dependsOn": [],
+												"userProperties": [],
+												"typeProperties": {
+													"pipeline": {
+														"referenceName": "validation pipeline",
+														"type": "PipelineReference"
+													},
+													"waitOnCompletion": true,
+													"parameters": {
+														"filename_valid_pipe": {
+															"value": "@variables('filename')",
+															"type": "Expression"
+														}
+													}
+												}
+											}
+										]
+									}
+								},
+								{
+									"name": "filename",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "filename",
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"variables": {
+					"filename": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-03-03T12:55:06Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/rawdataset')]",
+				"[concat(variables('factoryId'), '/datasets/dynamicdataset')]",
+				"[concat(variables('factoryId'), '/pipelines/validation pipeline')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/validation pipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "to validate schema.",
+				"activities": [
+					{
+						"name": "File metadata",
+						"description": "it takes file schema",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "dynamicdataset",
+								"type": "DatasetReference",
+								"parameters": {
+									"fileName": {
+										"value": "@pipeline().parameters.filename_valid_pipe",
+										"type": "Expression"
+									},
+									"folderName": "rawdata",
+									"containerName": "landing-zone"
+								}
+							},
+							"fieldList": [
+								"structure"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					},
+					{
+						"name": "check schema",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "File metadata",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "schema",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('schema').output.structure, activity('File metadata').output.structure)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "copy rejected data",
+									"description": "copy data to validation/airlines folder.",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										},
+										"sink": {
+											"type": "DelimitedTextSink",
+											"storeSettings": {
+												"type": "AzureBlobStorageWriteSettings"
+											},
+											"formatSettings": {
+												"type": "DelimitedTextWriteSettings",
+												"quoteAllText": true,
+												"fileExtension": ".txt"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "dynamicdataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileName": {
+													"value": "@pipeline().parameters.filename_valid_pipe",
+													"type": "Expression"
+												},
+												"folderName": "rawdata",
+												"containerName": "landing-zone"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "dynamicdataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileName": {
+													"value": "@pipeline().parameters.filename_valid_pipe",
+													"type": "Expression"
+												},
+												"folderName": "schemaFailure",
+												"containerName": "rejected"
+											}
+										}
+									]
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "ZipOrNot",
+									"description": "to process zip file.",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "zipfilepipeline",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"filename_zip_pipe": {
+												"value": "@pipeline().parameters.filename_valid_pipe",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "schema",
+						"description": "schema ",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "schemadataset",
+								"type": "DatasetReference",
+								"parameters": {
+									"filename": {
+										"value": "@pipeline().parameters.filename_valid_pipe",
+										"type": "Expression"
+									}
+								}
+							},
+							"fieldList": [
+								"structure"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"filename_valid_pipe": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-03-03T12:55:05Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/dynamicdataset')]",
+				"[concat(variables('factoryId'), '/datasets/schemadataset')]",
+				"[concat(variables('factoryId'), '/pipelines/zipfilepipeline')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/zipfilepipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "check if zip",
+						"description": "check if ends with zip.",
+						"type": "IfCondition",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@endswith(pipeline().parameters.filename_zip_pipe,'.zip')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "write vaild file",
+									"description": "unzip and write data",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										},
+										"sink": {
+											"type": "DelimitedTextSink",
+											"storeSettings": {
+												"type": "AzureBlobStorageWriteSettings"
+											},
+											"formatSettings": {
+												"type": "DelimitedTextWriteSettings",
+												"quoteAllText": true,
+												"fileExtension": ".txt"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "dynamicdataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileName": {
+													"value": "@pipeline().parameters.filename_zip_pipe",
+													"type": "Expression"
+												},
+												"folderName": "rawdata",
+												"containerName": "landing-zone"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "dynamicdataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileName": {
+													"value": "@pipeline().parameters.filename_zip_pipe",
+													"type": "Expression"
+												},
+												"folderName": {
+													"value": "@replace(pipeline().parameters.filename_zip_pipe,'.csv','')",
+													"type": "Expression"
+												},
+												"containerName": "validate"
+											}
+										}
+									]
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "unzip",
+									"description": "unzip and write data",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings",
+												"compressionProperties": {
+													"type": "ZipDeflateReadSettings"
+												}
+											}
+										},
+										"sink": {
+											"type": "DelimitedTextSink",
+											"storeSettings": {
+												"type": "AzureBlobStorageWriteSettings"
+											},
+											"formatSettings": {
+												"type": "DelimitedTextWriteSettings",
+												"quoteAllText": true,
+												"fileExtension": ".txt"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "flightzipdataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"filename": {
+													"value": "@pipeline().parameters.filename_zip_pipe",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "dynamicdataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileName": {
+													"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','.csv')",
+													"type": "Expression"
+												},
+												"folderName": {
+													"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','')",
+													"type": "Expression"
+												},
+												"containerName": "validate"
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"filename_zip_pipe": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-03-03T13:19:17Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/dynamicdataset')]",
+				"[concat(variables('factoryId'), '/datasets/flightzipdataset')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/dynamicdataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "find file with name.",
+				"linkedServiceName": {
+					"referenceName": "landingzone_ls",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"fileName": {
+						"type": "String"
+					},
+					"folderName": {
+						"type": "string"
+					},
+					"containerName": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folderName",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@dataset().containerName",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/landingzone_ls')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/flightzipdataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "landingzone_ls",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"filename": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().filename",
+							"type": "Expression"
+						},
+						"folderPath": "rawdata",
+						"container": "landing-zone"
+					},
+					"columnDelimiter": ",",
+					"compressionCodec": "ZipDeflate",
+					"compressionLevel": "Optimal",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "YEAR",
+						"type": "String"
+					},
+					{
+						"name": "MONTH",
+						"type": "String"
+					},
+					{
+						"name": "DAY",
+						"type": "String"
+					},
+					{
+						"name": "DAY_OF_WEEK",
+						"type": "String"
+					},
+					{
+						"name": "AIRLINE",
+						"type": "String"
+					},
+					{
+						"name": "FLIGHT_NUMBER",
+						"type": "String"
+					},
+					{
+						"name": "TAIL_NUMBER",
+						"type": "String"
+					},
+					{
+						"name": "ORIGIN_AIRPORT",
+						"type": "String"
+					},
+					{
+						"name": "DESTINATION_AIRPORT",
+						"type": "String"
+					},
+					{
+						"name": "SCHEDULED_DEPARTURE",
+						"type": "String"
+					},
+					{
+						"name": "DEPARTURE_TIME",
+						"type": "String"
+					},
+					{
+						"name": "DEPARTURE_DELAY",
+						"type": "String"
+					},
+					{
+						"name": "TAXI_OUT",
+						"type": "String"
+					},
+					{
+						"name": "WHEELS_OFF",
+						"type": "String"
+					},
+					{
+						"name": "SCHEDULED_TIME",
+						"type": "String"
+					},
+					{
+						"name": "ELAPSED_TIME",
+						"type": "String"
+					},
+					{
+						"name": "AIR_TIME",
+						"type": "String"
+					},
+					{
+						"name": "DISTANCE",
+						"type": "String"
+					},
+					{
+						"name": "WHEELS_ON",
+						"type": "String"
+					},
+					{
+						"name": "TAXI_IN",
+						"type": "String"
+					},
+					{
+						"name": "SCHEDULED_ARRIVAL",
+						"type": "String"
+					},
+					{
+						"name": "ARRIVAL_TIME",
+						"type": "String"
+					},
+					{
+						"name": "ARRIVAL_DELAY",
+						"type": "String"
+					},
+					{
+						"name": "DIVERTED",
+						"type": "String"
+					},
+					{
+						"name": "CANCELLED",
+						"type": "String"
+					},
+					{
+						"name": "CANCELLATION_REASON",
+						"type": "String"
+					},
+					{
+						"name": "AIR_SYSTEM_DELAY",
+						"type": "String"
+					},
+					{
+						"name": "SECURITY_DELAY",
+						"type": "String"
+					},
+					{
+						"name": "AIRLINE_DELAY",
+						"type": "String"
+					},
+					{
+						"name": "LATE_AIRCRAFT_DELAY",
+						"type": "String"
+					},
+					{
+						"name": "WEATHER_DELAY",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/landingzone_ls')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/rawdataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "landingzone_ls",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"folderPath": "rawdata",
+						"container": "landing-zone"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": false,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/landingzone_ls')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/schemadataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "landingzone_ls",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"filename": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().filename",
+							"type": "Expression"
+						},
+						"container": "refschema"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"type": "String"
+					},
+					{
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/landingzone_ls')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/landingzone_ls')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "This linked service is connected to landingzone.",
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": "[parameters('landingzone_ls_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/airlinesTrigger')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "master-pipeline",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "BlobEventsTrigger",
+				"typeProperties": {
+					"blobPathBeginsWith": "/landing-zone/blobs/rawdata",
+					"ignoreEmptyBlobs": true,
+					"scope": "[parameters('airlinesTrigger_properties_typeProperties_scope')]",
+					"events": [
+						"Microsoft.Storage.BlobCreated"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/master-pipeline')]"
+			]
+		}
+	]
+}

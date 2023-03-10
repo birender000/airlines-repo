@@ -1,0 +1,21 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "airlines-adfactory"
+		},
+		"landingzone_ls_connectionString": {
+			"value": ""
+		},
+		"airlinesTrigger_properties_typeProperties_scope": {
+			"value": "/subscriptions/9a1be070-51c7-4856-9b97-326a714b21a9/resourceGroups/airlines-rg/providers/Microsoft.Storage/storageAccounts/airlinesstorageaccount"
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}
