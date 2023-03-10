@@ -1,0 +1,189 @@
+{
+	"name": "zipfilepipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "check if zip",
+				"description": "check if ends with zip.",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@endswith(pipeline().parameters.filename_zip_pipe,'.zip')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "write vaild file",
+							"description": "unzip and write data",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "dynamicdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@pipeline().parameters.filename_zip_pipe",
+											"type": "Expression"
+										},
+										"folderName": "rawdata",
+										"containerName": "landing-zone"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "dynamicdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@pipeline().parameters.filename_zip_pipe",
+											"type": "Expression"
+										},
+										"folderName": {
+											"value": "@replace(pipeline().parameters.filename_zip_pipe,'.csv','')",
+											"type": "Expression"
+										},
+										"containerName": "validate"
+									}
+								}
+							]
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "unzip",
+							"description": "unzip and write data",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings",
+										"compressionProperties": {
+											"type": "ZipDeflateReadSettings"
+										}
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "flightzipdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"filename": {
+											"value": "@pipeline().parameters.filename_zip_pipe",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "dynamicdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','.csv')",
+											"type": "Expression"
+										},
+										"folderName": {
+											"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','')",
+											"type": "Expression"
+										},
+										"containerName": "validate"
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"filename_zip_pipe": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-03-03T13:19:17Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

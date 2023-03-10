@@ -1,0 +1,24 @@
+{
+	"name": "airlinesTrigger",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "master-pipeline",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "BlobEventsTrigger",
+		"typeProperties": {
+			"blobPathBeginsWith": "/landing-zone/blobs/rawdata",
+			"ignoreEmptyBlobs": true,
+			"scope": "/subscriptions/9a1be070-51c7-4856-9b97-326a714b21a9/resourceGroups/airlines-rg/providers/Microsoft.Storage/storageAccounts/airlinesstorageaccount",
+			"events": [
+				"Microsoft.Storage.BlobCreated"
+			]
+		}
+	}
+}

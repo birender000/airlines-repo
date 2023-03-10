@@ -1,0 +1,201 @@
+{
+	"name": "master-pipeline",
+	"properties": {
+		"description": "main pipeline.",
+		"activities": [
+			{
+				"name": "rawdata",
+				"description": "It will provide the metadata such as files name from rawdata folder.",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "rawdataset",
+						"type": "DatasetReference"
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "DelimitedTextReadSettings"
+					}
+				}
+			},
+			{
+				"name": "ForEachFile",
+				"description": "iterate each filename. \n",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "rawdata",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('rawdata').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "checkfilename",
+							"description": "Check the filename  = required file name.",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "filename",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(\n    or(\n        equals(variables('filename'),'airports.csv')\n        ,equals(variables('filename'),'airlines.csv')\n    )\n    ,equals(variables('filename'),'flights.zip')\n)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "invalid",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "dynamicdataset",
+												"type": "DatasetReference",
+												"parameters": {
+													"fileName": {
+														"value": "@variables('filename')",
+														"type": "Expression"
+													},
+													"folderName": "rawdata",
+													"containerName": "landing-zone"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "dynamicdataset",
+												"type": "DatasetReference",
+												"parameters": {
+													"fileName": {
+														"value": "@variables('filename')",
+														"type": "Expression"
+													},
+													"folderName": "invalid",
+													"containerName": "rejected"
+												}
+											}
+										]
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "validation pipeline",
+										"description": "to validate the schema.",
+										"type": "ExecutePipeline",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "validation pipeline",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"filename_valid_pipe": {
+													"value": "@variables('filename')",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "filename",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "filename",
+								"value": {
+									"value": "@item().name",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"filename": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-03-03T12:55:06Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
