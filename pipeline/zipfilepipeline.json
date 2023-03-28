@@ -3,20 +3,20 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "check if zip",
+				"name": "check if zip or invalid files",
 				"description": "check if ends with zip.",
 				"type": "IfCondition",
 				"dependsOn": [],
 				"userProperties": [],
 				"typeProperties": {
 					"expression": {
-						"value": "@endswith(pipeline().parameters.filename_zip_pipe,'.zip')",
+						"value": "@equals(pipeline().parameters.filename_zip_pipe,'flights.zip')",
 						"type": "Expression"
 					},
 					"ifFalseActivities": [
 						{
-							"name": "write vaild file",
-							"description": "unzip and write data",
+							"name": "copy rejected data",
+							"description": "copy data to validation/airlines folder.",
 							"type": "Copy",
 							"dependsOn": [],
 							"policy": {
@@ -66,7 +66,7 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"fileName": {
-											"value": "@pipeline().parameters.filename_zip_pipe",
+											"value": "@pipeline().parameters.filename_valid_pipe",
 											"type": "Expression"
 										},
 										"folderName": "rawdata",
@@ -80,14 +80,11 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"fileName": {
-											"value": "@pipeline().parameters.filename_zip_pipe",
+											"value": "@pipeline().parameters.filename_valid_pipe",
 											"type": "Expression"
 										},
-										"folderName": {
-											"value": "@replace(pipeline().parameters.filename_zip_pipe,'.csv','')",
-											"type": "Expression"
-										},
-										"containerName": "validate"
+										"folderName": "schemaFailure",
+										"containerName": "rejected"
 									}
 								}
 							]
@@ -98,7 +95,14 @@
 							"name": "unzip",
 							"description": "unzip and write data",
 							"type": "Copy",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "zip file name",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
 							"policy": {
 								"timeout": "0.12:00:00",
 								"retry": 0,
@@ -162,17 +166,53 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"fileName": {
-											"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','.csv')",
+											"value": "@variables('zip file name')",
 											"type": "Expression"
 										},
-										"folderName": {
-											"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','')",
-											"type": "Expression"
-										},
-										"containerName": "validate"
+										"folderName": "rawdata",
+										"containerName": "landing-zone"
 									}
 								}
 							]
+						},
+						{
+							"name": "validation pipeline",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "unzip",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "validation pipeline",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"filename_valid_pipe": {
+										"value": "@variables('zip file name')",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "zip file name",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "zip file name",
+								"value": {
+									"value": "@replace(pipeline().parameters.filename_zip_pipe,'.zip','.csv')",
+									"type": "Expression"
+								}
+							}
 						}
 					]
 				}
@@ -180,6 +220,11 @@
 		],
 		"parameters": {
 			"filename_zip_pipe": {
+				"type": "String"
+			}
+		},
+		"variables": {
+			"zip file name": {
 				"type": "String"
 			}
 		},

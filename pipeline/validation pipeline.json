@@ -144,24 +144,82 @@
 					],
 					"ifTrueActivities": [
 						{
-							"name": "ZipOrNot",
-							"description": "to process zip file.",
-							"type": "ExecutePipeline",
+							"name": "write valid file",
+							"description": "unzip and write data",
+							"type": "Copy",
 							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
-								"pipeline": {
-									"referenceName": "zipfilepipeline",
-									"type": "PipelineReference"
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
 								},
-								"waitOnCompletion": true,
-								"parameters": {
-									"filename_zip_pipe": {
-										"value": "@pipeline().parameters.filename_valid_pipe",
-										"type": "Expression"
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
 									}
 								}
-							}
+							},
+							"inputs": [
+								{
+									"referenceName": "dynamicdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@pipeline().parameters.filename_valid_pipe",
+											"type": "Expression"
+										},
+										"folderName": "rawdata",
+										"containerName": "landing-zone"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "dynamicdataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@pipeline().parameters.filename_valid_pipe",
+											"type": "Expression"
+										},
+										"folderName": {
+											"value": "@replace(pipeline().parameters.filename_valid_pipe,'.csv','')",
+											"type": "Expression"
+										},
+										"containerName": "validate"
+									}
+								}
+							]
 						}
 					]
 				}
@@ -207,6 +265,11 @@
 		"parameters": {
 			"filename_valid_pipe": {
 				"type": "string"
+			}
+		},
+		"variables": {
+			"zip file name": {
+				"type": "String"
 			}
 		},
 		"annotations": [],
