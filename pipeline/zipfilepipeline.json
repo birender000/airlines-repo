@@ -66,7 +66,7 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"fileName": {
-											"value": "@pipeline().parameters.filename_valid_pipe",
+											"value": "@pipeline().parameters.filename_zip_pipe",
 											"type": "Expression"
 										},
 										"folderName": "rawdata",
@@ -80,7 +80,7 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"fileName": {
-											"value": "@pipeline().parameters.filename_valid_pipe",
+											"value": "@pipeline().parameters.filename_zip_pipe",
 											"type": "Expression"
 										},
 										"folderName": "schemaFailure",
