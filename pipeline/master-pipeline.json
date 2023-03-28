@@ -69,83 +69,22 @@
 							"userProperties": [],
 							"typeProperties": {
 								"expression": {
-									"value": "@or(\n    or(\n        equals(variables('filename'),'airports.csv')\n        ,equals(variables('filename'),'airlines.csv')\n    )\n    ,equals(variables('filename'),'flights.zip')\n)",
+									"value": "@or( equals(variables('filename'),'airports.csv')\n        ,equals(variables('filename'),'airlines.csv'))",
 									"type": "Expression"
 								},
 								"ifFalseActivities": [
 									{
-										"name": "invalid",
-										"type": "Copy",
+										"name": "unzip file pipeline",
+										"type": "ExecutePipeline",
 										"dependsOn": [],
-										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
 										"userProperties": [],
 										"typeProperties": {
-											"source": {
-												"type": "DelimitedTextSource",
-												"storeSettings": {
-													"type": "AzureBlobStorageReadSettings",
-													"recursive": true,
-													"enablePartitionDiscovery": false
-												},
-												"formatSettings": {
-													"type": "DelimitedTextReadSettings"
-												}
+											"pipeline": {
+												"referenceName": "zipfilepipeline",
+												"type": "PipelineReference"
 											},
-											"sink": {
-												"type": "DelimitedTextSink",
-												"storeSettings": {
-													"type": "AzureBlobStorageWriteSettings"
-												},
-												"formatSettings": {
-													"type": "DelimitedTextWriteSettings",
-													"quoteAllText": true,
-													"fileExtension": ".txt"
-												}
-											},
-											"enableStaging": false,
-											"translator": {
-												"type": "TabularTranslator",
-												"typeConversion": true,
-												"typeConversionSettings": {
-													"allowDataTruncation": true,
-													"treatBooleanAsNumber": false
-												}
-											}
-										},
-										"inputs": [
-											{
-												"referenceName": "dynamicdataset",
-												"type": "DatasetReference",
-												"parameters": {
-													"fileName": {
-														"value": "@variables('filename')",
-														"type": "Expression"
-													},
-													"folderName": "rawdata",
-													"containerName": "landing-zone"
-												}
-											}
-										],
-										"outputs": [
-											{
-												"referenceName": "dynamicdataset",
-												"type": "DatasetReference",
-												"parameters": {
-													"fileName": {
-														"value": "@variables('filename')",
-														"type": "Expression"
-													},
-													"folderName": "invalid",
-													"containerName": "rejected"
-												}
-											}
-										]
+											"waitOnCompletion": true
+										}
 									}
 								],
 								"ifTrueActivities": [
@@ -191,6 +130,9 @@
 		],
 		"variables": {
 			"filename": {
+				"type": "String"
+			},
+			"zip file name": {
 				"type": "String"
 			}
 		},
