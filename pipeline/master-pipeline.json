@@ -83,7 +83,13 @@
 												"referenceName": "zipfilepipeline",
 												"type": "PipelineReference"
 											},
-											"waitOnCompletion": true
+											"waitOnCompletion": true,
+											"parameters": {
+												"filename_zip_pipe": {
+													"value": "@variables('filename')",
+													"type": "Expression"
+												}
+											}
 										}
 									}
 								],
